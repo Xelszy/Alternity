@@ -11,7 +11,10 @@ import {
   ChevronRight, 
   Loader2, 
   Image as ImageIcon,
-  AlertCircle
+  AlertCircle,
+  Folder,
+  Smile,
+  FolderOpen
 } from "lucide-react";
 
 // --- CONFIGURATION ---
@@ -77,7 +80,6 @@ Baju casual: polo shirt hitam, ankle pants cream, black leather jacket`;
 const generatePythonScript = (jsonData: any) => {
   const jsonString = JSON.stringify(jsonData, null, 4);
   
-  // We use double curly braces {{ }} to escape them in the f-string equivalent
   return `import os
 import time
 from pathlib import Path
@@ -135,7 +137,6 @@ def generate(prompt, path, refs=None):
             )
         )
         if response.candidates and response.candidates[0].content.parts:
-            # Handle potential multiple parts or finding the right image part
             for part in response.candidates[0].content.parts:
                 if part.inline_data:
                      with open(path, "wb") as f:
@@ -149,28 +150,40 @@ def generate(prompt, path, refs=None):
 for name, data in CHARACTERS.items():
     print(f"\\n👤 {name.upper()}")
     base_dir = Path(f"references/{name}")
+    headshots_dir = base_dir / "headshots"
+    outfits_dir = base_dir / "outfits"
     
-    # 1. Headshots (Progressive)
+    # 1. Headshots (Multiple Angles with Expressions) - di folder headshots
     hs_prompts = {
-        "front": f"ID PHOTO, Front view, {data['stats']['ethnicity']}, {data['stats']['age']}. Face: {data['visuals']['face']}. Hair: {data['visuals']['hair']}. Photorealistic, 8k, neutral background.",
-        "side": f"Side profile view, {data['stats']['ethnicity']}. Same person. Face: {data['visuals']['face']}. Hair: {data['visuals']['hair']}."
+        "front": f"HEADSHOT, front view, {data['stats']['ethnicity']}, {data['stats']['age']}. Face: {data['visuals']['face']}. Hair: {data['visuals']['hair']}. Photorealistic, 8k, neutral background, professional portrait lighting, sharp focus on eyes.",
+        "side": f"HEADSHOT, side profile view, {data['stats']['ethnicity']}. Same person. Face: {data['visuals']['face']}. Hair: {data['visuals']['hair']}. Photorealistic, 8k, professional portrait.",
+        "three_quarter": f"HEADSHOT, three-quarter view, {data['stats']['ethnicity']}. Face: {data['visuals']['face']}. Hair: {data['visuals']['hair']}. Photorealistic, 8k, soft natural lighting, cinematic.",
+        "smiling": f"HEADSHOT, front view, {data['stats']['ethnicity']}, {data['stats']['age']}. SMILING gently with teeth showing, natural happy expression. Face: {data['visuals']['face']}. Hair: {data['visuals']['hair']}. Photorealistic, 8k, warm lighting, friendly portrait."
     }
     
-    f_path = base_dir / "headshot_front.png"
-    s_path = base_dir / "headshot_side.png"
+    f_path = headshots_dir / "front.png"
+    s_path = headshots_dir / "side.png"
+    tq_path = headshots_dir / "three_quarter.png"
+    sm_path = headshots_dir / "smiling.png"
     
+    # Generate front first, then use as reference for others
     generate(hs_prompts["front"], f_path)
     generate(hs_prompts["side"], s_path, refs=[f_path])
+    generate(hs_prompts["three_quarter"], tq_path, refs=[f_path])
+    generate(hs_prompts["smiling"], sm_path, refs=[f_path])
     
-    # 2. Outfits
-    refs = [p for p in [f_path, s_path] if p.exists()]
+    # 2. Outfits (Full Body from Head to Toe) - di folder outfits
+    # Use multiple headshots as references for consistency
+    refs = [p for p in [f_path, s_path, tq_path, sm_path] if p.exists()]
     
     for outfit_name, outfit_desc in data['outfits'].items():
         print(f"   👗 Outfit: {outfit_name}")
-        # Clean filename
         safe_name = outfit_name.replace(" ", "_").lower()
-        prompt = f"Full body shot, {data['stats']['ethnicity']}. Wearing {outfit_desc}. Hair: {data['visuals']['hair']}. Studio lighting."
-        generate(prompt, base_dir / f"outfit_{safe_name}.png", refs=refs)
+        
+        # Enhanced prompt for FULL BODY from head to toe
+        prompt = f"FULL BODY PORTRAIT, head to toe, full-length shot, {data['stats']['ethnicity']}, {data['stats']['age']}. Wearing: {outfit_desc}. Hair: {data['visuals']['hair']}. Standing in a neutral studio environment, full body visible from head to feet, cinematic lighting, 8k, photorealistic, detailed clothing texture, visible shoes and accessories."
+        
+        generate(prompt, outfits_dir / f"{safe_name}.png", refs=refs)
 
 print("\\n✅ DONE! Check references folder.")
 `;
@@ -188,6 +201,7 @@ const App = () => {
   
   // Preview State
   const [previewChar, setPreviewChar] = useState<string>("");
+  const [previewType, setPreviewType] = useState<"headshot_front" | "headshot_smiling" | "outfit_default">("headshot_front");
   const [previewGenerating, setPreviewGenerating] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
@@ -221,7 +235,8 @@ const App = () => {
         setActiveTab("json");
         // Select first char for preview default
         if (Object.keys(parsed).length > 0) {
-          setPreviewChar(Object.keys(parsed)[0]);
+          const firstChar = Object.keys(parsed)[0];
+          setPreviewChar(firstChar);
         }
       } else {
         throw new Error("Empty response from AI");
@@ -255,13 +270,25 @@ const App = () => {
     setPreviewImage(null);
 
     const charData = jsonResult[previewChar];
-    // Construct prompt similar to the python script
-    const prompt = `ID PHOTO, Front view, ${charData.stats.ethnicity}, ${charData.stats.age}. Face: ${charData.visuals.face}. Hair: ${charData.visuals.hair}. Photorealistic, 8k, neutral background.`;
+    let prompt = "";
+
+    // Construct appropriate prompt based on preview type
+    switch(previewType) {
+      case "headshot_front":
+        prompt = `HEADSHOT, front view, ${charData.stats.ethnicity}, ${charData.stats.age}. Face: ${charData.visuals.face}. Hair: ${charData.visuals.hair}. Photorealistic, 8k, neutral background, professional portrait lighting, sharp focus on eyes.`;
+        break;
+      case "headshot_smiling":
+        prompt = `HEADSHOT, front view, ${charData.stats.ethnicity}, ${charData.stats.age}. SMILING gently with teeth showing, natural happy expression. Face: ${charData.visuals.face}. Hair: ${charData.visuals.hair}. Photorealistic, 8k, warm lighting, friendly portrait.`;
+        break;
+      case "outfit_default":
+        const outfitDesc = charData.outfits.default || charData.outfits[Object.keys(charData.outfits)[0]];
+        prompt = `FULL BODY PORTRAIT, head to toe, full-length shot, ${charData.stats.ethnicity}, ${charData.stats.age}. Wearing: ${outfitDesc}. Hair: ${charData.visuals.hair}. Standing in a neutral studio environment, full body visible from head to feet, cinematic lighting, 8k, photorealistic, detailed clothing texture, visible shoes and accessories.`;
+        break;
+    }
 
     try {
       const ai = new GoogleGenAI({ apiKey });
       
-      // Using gemini-3-pro-image-preview for high quality preview as per design doc standards
       const response = await ai.models.generateContent({
         model: "gemini-3-pro-image-preview",
         contents: {
@@ -299,6 +326,14 @@ const App = () => {
     }
   };
 
+  // Update preview type when character changes
+  useEffect(() => {
+    if (jsonResult && previewChar && jsonResult[previewChar]) {
+      // Reset to headshot_front when changing character
+      setPreviewType("headshot_front");
+    }
+  }, [previewChar, jsonResult]);
+
   return (
     <div className="min-h-screen font-sans text-slate-300 selection:bg-indigo-500/30">
       {/* Header */}
@@ -313,7 +348,7 @@ const App = () => {
           <div className="flex gap-4 text-sm font-medium">
              <div className="flex items-center gap-2 px-3 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">
                 <Terminal size={14} />
-                <span>v1.0.3 (Accessories+)</span>
+                <span>v1.0.5 (Organized Folders)</span>
              </div>
           </div>
         </div>
@@ -461,20 +496,28 @@ const App = () => {
                     Module 2: Factory
                   </h3>
                   <p className="text-sm text-slate-400">
-                    Your data is ready. You can now generate the Python script which includes:
+                    Your data is ready. The generated script now includes:
                   </p>
                   <ul className="text-sm text-slate-500 space-y-2">
                      <li className="flex items-center gap-2">
-                       <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                       Embedded JSON Data
+                       <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                       <strong>4 Headshot Angles</strong> (Front, Side, ¾, Smiling)
                      </li>
                      <li className="flex items-center gap-2">
-                       <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                       Gemini 3 Pro Image Logic
+                       <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                       <strong>Full Body Outfits</strong> (Head to Toe)
                      </li>
                      <li className="flex items-center gap-2">
-                       <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                       Automatic Cropping (4:5)
+                       <FolderOpen size={14} className="text-blue-400" />
+                       <strong>Separate Headshots Folder</strong>
+                     </li>
+                     <li className="flex items-center gap-2">
+                       <Folder size={14} className="text-green-400" />
+                       <strong>Separate Outfits Folder</strong>
+                     </li>
+                     <li className="flex items-center gap-2">
+                       <Smile size={14} className="text-yellow-500" />
+                       <strong>Smiling Expression</strong> Added
                      </li>
                   </ul>
                   
@@ -495,7 +538,10 @@ const App = () => {
                     {Object.keys(jsonResult).map(name => (
                       <div key={name} className="flex items-center justify-between p-2 rounded bg-slate-800/50 border border-slate-700/50">
                         <span className="text-sm font-medium text-white">{name}</span>
-                        <span className="text-xs text-slate-500">{Object.keys(jsonResult[name].outfits).length} outfits</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500">{Object.keys(jsonResult[name].outfits).length} outfits</span>
+                          <span className="text-xs text-indigo-400">• 4 headshots</span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -530,6 +576,8 @@ const App = () => {
             <div className="space-y-6">
                <div className="p-6 rounded-xl bg-slate-800/50 border border-slate-700 space-y-4">
                   <h3 className="font-semibold text-white">Live Test</h3>
+                  
+                  {/* Character Selection */}
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-slate-500 uppercase">Target Character</label>
                     <div className="grid grid-cols-2 gap-2">
@@ -545,8 +593,34 @@ const App = () => {
                     </div>
                   </div>
 
+                  {/* Preview Type Selection */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-slate-500 uppercase">Preview Type</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() => setPreviewType("headshot_front")}
+                        className={`px-3 py-2 rounded text-sm font-medium transition-all border ${previewType === "headshot_front" ? "bg-blue-600 border-blue-500 text-white" : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600"}`}
+                      >
+                        Headshot
+                      </button>
+                      <button
+                        onClick={() => setPreviewType("headshot_smiling")}
+                        className={`px-3 py-2 rounded text-sm font-medium transition-all border flex items-center justify-center gap-1 ${previewType === "headshot_smiling" ? "bg-yellow-600 border-yellow-500 text-white" : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600"}`}
+                      >
+                        <Smile size={14} />
+                        Smiling
+                      </button>
+                      <button
+                        onClick={() => setPreviewType("outfit_default")}
+                        className={`px-3 py-2 rounded text-sm font-medium transition-all border ${previewType === "outfit_default" ? "bg-green-600 border-green-500 text-white" : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600"}`}
+                      >
+                        Outfit
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="pt-4 text-xs text-slate-500">
-                    <p>Testing prompt for <strong>Headshot (Front)</strong>.</p>
+                    <p>Testing <strong>{previewType === "headshot_front" ? "Headshot (Front)" : previewType === "headshot_smiling" ? "Headshot (Smiling)" : "Full Body Outfit"}</strong>.</p>
                     <p className="mt-1 opacity-75">This uses <code>gemini-3-pro-image-preview</code> to match the final script's output.</p>
                   </div>
 
@@ -563,8 +637,27 @@ const App = () => {
                <div className="p-6 rounded-xl bg-slate-900 border border-slate-800">
                  <h4 className="text-sm font-semibold text-white mb-2">Ready to ship?</h4>
                  <p className="text-sm text-slate-400 mb-4">
-                   Once you are happy with the JSON data, download the Python script to run the full batch generation on your local machine.
+                   The generated script will create this organized folder structure:
                  </p>
+                 <div className="text-xs font-mono bg-slate-950 p-3 rounded border border-slate-800 mb-4">
+                   <div className="text-slate-400">references/</div>
+                   <div className="text-slate-400 ml-4">{previewChar || "character"}/</div>
+                   <div className="text-blue-400 ml-8">headshots/</div>
+                   <div className="text-blue-300 ml-12">front.png</div>
+                   <div className="text-blue-300 ml-12">side.png</div>
+                   <div className="text-blue-300 ml-12">three_quarter.png</div>
+                   <div className="text-yellow-300 ml-12">smiling.png</div>
+                   <div className="text-green-400 ml-8">outfits/</div>
+                   {jsonResult[previewChar] && Object.keys(jsonResult[previewChar].outfits).map(outfit => (
+                     <div key={outfit} className="text-green-300 ml-12">{outfit.replace(" ", "_")}.png</div>
+                   ))}
+                 </div>
+                 <div className="flex items-center gap-2 text-xs text-slate-500 mb-4">
+                   <FolderOpen size={12} className="text-blue-400" />
+                   <span>Headshots in dedicated folder</span>
+                   <Folder size={12} className="ml-2 text-green-400" />
+                   <span>Outfits in separate folder</span>
+                 </div>
                  <button
                     onClick={handleDownload}
                     className="w-full py-2 px-4 rounded border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors text-sm flex items-center justify-center gap-2"
