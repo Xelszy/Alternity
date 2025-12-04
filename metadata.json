@@ -1,0 +1,5 @@
+{
+  "name": "Character Forge AI",
+  "description": "An advanced system to normalize raw character descriptions into structured JSON and generate Python generation scripts powered by Gemini.",
+  "requestFramePermissions": []
+}
