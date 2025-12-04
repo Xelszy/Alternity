@@ -1,20 +1,19 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+  <img src="https://alternity.id/assets/images/logo-1.svg" height="90" alt="Alternity Logo" />
+  
+  <h1>Alternity</h1>
+  <p>Toolkit automation dan workflow internal Alternity.</p>
 </div>
 
-# Run and deploy your AI Studio app
+---
 
-This contains everything you need to run your app locally.
+## 🚀 Development
 
-View your app in AI Studio: https://ai.studio/apps/drive/1BOQFSNn2uDEE6t8qMOXM9sFjmmwExCFW
+**Prerequisites:**  
+- Node.js (versi 18+ direkomendasikan)  
+- `GEMINI_API_KEY` di file `.env.local`
 
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### Cara menjalankan
+```bash
+npm install
+npm run dev
